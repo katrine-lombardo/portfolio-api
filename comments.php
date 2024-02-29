@@ -40,16 +40,29 @@ header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
 // Check if the request method is POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Read raw data from request body
+    $inputJSON = file_get_contents('php://input');
+
+    // Decode JSON data
+    $input = json_decode($inputJSON, true);
+
+    // Check if JSON data is properly decoded
+    if ($input === null) {
+        // JSON decoding failed
+        http_response_code(400); // Bad Request
+        exit("Invalid JSON data");
+    }
+
+    // Extract data from JSON
+    $name = $input['name'];
+    $email = $input['email'];
+    $comment = $input['comment'];
+
     // Connect to MySQL
     $mysqli = new mysqli($host, $username, $password, $database, $port);
     if ($mysqli->connect_error) {
         die('Connect Error (' . $mysqli->connect_errno . ') ' . $mysqli->connect_error);
     }
-
-    // Sanitize input
-    $name = $mysqli->real_escape_string($_POST['name']);
-    $email = $mysqli->real_escape_string($_POST['email']);
-    $comment = $mysqli->real_escape_string($_POST['comment']);
 
     // Prepare the SQL statement
     $stmt = $mysqli->prepare("INSERT INTO comments (name, email, comment) VALUES (?, ?, ?)");
