@@ -3,31 +3,96 @@
 // Include database credentials from config.php
 require_once('config.php');
 
-// Connect to MySQL
-$mysqli = new mysqli($host, $username, $password, $database, $port);
-if ($mysqli->connect_error) {
-    die('Connect Error (' . $mysqli->connect_errno . ') ' . $mysqli->connect_error);
+// Define allowed origins for POST requests
+$allowedOriginsForPost = array(
+    'http://localhost:5173',
+    'https://badingo.net',
+    // Add other allowed origins as needed
+);
+
+// Function to check if the request's origin is allowed
+function isOriginAllowed($origin) {
+    global $allowedOriginsForPost;
+    return in_array($origin, $allowedOriginsForPost);
 }
 
-// Perform the database query
-$query = "SELECT * FROM comments";
-$result = $mysqli->query($query);
+// Check if the request method is OPTIONS (preflight request)
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    // Respond with a 200 status code to indicate that CORS preflight is allowed
+    http_response_code(200);
+    exit();
+}
 
-// Prepare data for JSON encoding
-$data = array();
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $data[] = $row;
+// Get the Origin header from the request
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+
+// Check if the requesting origin is allowed for POST requests
+if (in_array($_SERVER['REQUEST_METHOD'], array('POST', 'OPTIONS')) && !isOriginAllowed($origin)) {
+    // Requesting origin is not allowed for POST requests
+    http_response_code(403); // Forbidden
+    exit("Access denied");
+}
+
+// Set CORS headers
+header("Access-Control-Allow-Origin: $origin");
+header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
+
+// Check if the request method is POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Connect to MySQL
+    $mysqli = new mysqli($host, $username, $password, $database, $port);
+    if ($mysqli->connect_error) {
+        die('Connect Error (' . $mysqli->connect_errno . ') ' . $mysqli->connect_error);
     }
-    $result->free();
-} else {
-    echo "Error executing query: " . $mysqli->error;
+
+    // Sanitize input
+    $name = $mysqli->real_escape_string($_POST['name']);
+    $email = $mysqli->real_escape_string($_POST['email']);
+    $comment = $mysqli->real_escape_string($_POST['comment']);
+
+    // Prepare the SQL statement
+    $stmt = $mysqli->prepare("INSERT INTO comments (name, email, comment) VALUES (?, ?, ?)");
+    $stmt->bind_param("sss", $name, $email, $comment);
+
+    // Execute the statement
+    if ($stmt->execute()) {
+        echo "Comment added successfully";
+    } else {
+        echo "Error: " . $stmt->error;
+    }
+
+    // Close the statement
+    $stmt->close();
+
+    // Close the MySQL connection
+    $mysqli->close();
+} elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    // Connect to MySQL
+    $mysqli = new mysqli($host, $username, $password, $database, $port);
+    if ($mysqli->connect_error) {
+        die('Connect Error (' . $mysqli->connect_errno . ') ' . $mysqli->connect_error);
+    }
+
+    // Select and return comments
+    $query = "SELECT * FROM comments";
+    $result = $mysqli->query($query);
+
+    // Prepare data for JSON encoding
+    $data = array();
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $data[] = $row;
+        }
+        $result->free();
+    } else {
+        echo "Error executing query: " . $mysqli->error;
+    }
+
+    // Close the MySQL connection
+    $mysqli->close();
+
+    // Send data as JSON
+    header('Content-Type: application/json');
+    echo json_encode($data);
 }
-
-// Close the MySQL connection
-$mysqli->close();
-
-// Send data as JSON
-header('Content-Type: application/json');
-echo json_encode($data);
-?>
