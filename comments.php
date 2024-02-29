@@ -16,15 +16,25 @@ function isOriginAllowed($origin) {
     return in_array($origin, $allowedOriginsForPost);
 }
 
-// Check if the request method is OPTIONS (preflight request)
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    // Respond with a 200 status code to indicate that CORS preflight is allowed
-    http_response_code(200);
-    exit();
-}
-
 // Get the Origin header from the request
 $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+
+// Check if the request method is OPTIONS (preflight request)
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    // Check if the requesting origin is allowed for POST requests
+    if (isOriginAllowed($origin)) {
+        // Set CORS headers for preflight requests
+        header("Access-Control-Allow-Origin: $origin");
+        header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
+        header("Access-Control-Allow-Headers: Content-Type, Authorization");
+        http_response_code(200);
+        exit();
+    } else {
+        // Origin not allowed
+        http_response_code(403); // Forbidden
+        exit("Access denied");
+    }
+}
 
 // Check if the requesting origin is allowed for POST requests
 if (in_array($_SERVER['REQUEST_METHOD'], array('POST', 'OPTIONS')) && !isOriginAllowed($origin)) {
@@ -33,7 +43,7 @@ if (in_array($_SERVER['REQUEST_METHOD'], array('POST', 'OPTIONS')) && !isOriginA
     exit("Access denied");
 }
 
-// Set CORS headers
+// Set CORS headers for actual requests (POST, GET)
 header("Access-Control-Allow-Origin: $origin");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
